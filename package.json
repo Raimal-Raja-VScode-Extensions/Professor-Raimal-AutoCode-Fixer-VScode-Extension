@@ -1,0 +1,60 @@
+{
+  "name": "professor-raimal",
+  "displayName": "Professor Raimal — AI Error Fixer",
+  "description": "Automatically detects terminal errors and fixes them using Gemini AI — free, no API key required.",
+  "version": "1.0.0",
+  "publisher": "Professor-Raimal",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": ["Other", "Programming Languages"],
+  "keywords": ["error", "fix", "AI", "terminal", "debug", "gemini"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "professor-raimal.fixError",
+        "title": "✨ Professor Raimal: Fix This Error"
+      },
+      {
+        "command": "professor-raimal.analyzeTerminal",
+        "title": "✨ Professor Raimal: Analyze Terminal"
+      }
+    ],
+    "menus": {
+      "terminal/context": [
+        {
+          "command": "professor-raimal.analyzeTerminal",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Professor Raimal",
+      "properties": {
+        "professorRaimal.autoDetect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect errors in the terminal"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+   "@types/vscode": "^1.93.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.22.0"
+  }
+}
