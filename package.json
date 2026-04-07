@@ -1,8 +1,8 @@
 {
-  "name": "professor-raimal",
-  "displayName": "Professor Raimal — AI Error Fixer",
+  "name": "professor-raimal-auto-code-fixer",
+  "displayName": "Professor Raimal Raja — AI Error Fixer",
   "description": "Automatically detects terminal errors and fixes them using Gemini AI — free, no API key required.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "Professor-Raimal",
   "icon": "media/icon.png",
   "engines": {
@@ -17,24 +17,24 @@
   "contributes": {
     "commands": [
       {
-        "command": "professor-raimal.fixError",
-        "title": "✨ Professor Raimal: Fix This Error"
+        "command": "professor-raimal-raja.fixError",
+        "title": "✨ Professor Raimal-Raja: Fix This Error"
       },
       {
-        "command": "professor-raimal.analyzeTerminal",
-        "title": "✨ Professor Raimal: Analyze Terminal"
+        "command": "professor-raimal-raja.analyzeTerminal",
+        "title": "✨ Professor Raimal-Raja: Analyze Terminal"
       }
     ],
     "menus": {
       "terminal/context": [
         {
-          "command": "professor-raimal.analyzeTerminal",
+          "command": "professor-raimal-raja.analyzeTerminal",
           "group": "navigation"
         }
       ]
     },
     "configuration": {
-      "title": "Professor Raimal",
+      "title": "Professor Raimal Raja",
       "properties": {
         "professorRaimal.autoDetect": {
           "type": "boolean",
@@ -45,12 +45,14 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "vsce package",
-    "publish": "vsce publish"
-  },
+  "vscode:prepublish": "npm run compile",
+  "compile": "tsc -p ./",
+  "watch": "tsc -watch -p ./",
+  "watch:tsc": "tsc -watch -p ./",
+  "watch:esbuild": "tsc -watch -p ./",
+  "package": "vsce package",
+  "publish": "vsce publish"
+},
   "devDependencies": {
    "@types/vscode": "^1.93.0",
     "@types/node": "^18.0.0",
