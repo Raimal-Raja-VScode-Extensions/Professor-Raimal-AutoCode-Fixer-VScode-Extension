@@ -1,280 +1,274 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Professor Raimal</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  
-  body {
-    font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
-    font-size: 13px;
-    background: var(--vscode-editor-background, #1e1e1e);
-    color: var(--vscode-editor-foreground, #d4d4d4);
-    padding: 0;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* Header */
-  .header {
-    background: var(--vscode-titleBar-activeBackground, #323233);
-    padding: 10px 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border-bottom: 1px solid var(--vscode-panel-border, #404040);
-    flex-shrink: 0;
-  }
-  .header-icon { font-size: 18px; }
-  .header-title { font-size: 14px; font-weight: 600; color: var(--vscode-titleBar-activeForeground, #fff); }
-  .header-sub { font-size: 11px; color: var(--vscode-descriptionForeground, #999); margin-left: auto; }
-
-  /* Main scroll area */
-  .content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  /* Error box */
-  .error-box {
-    background: rgba(255, 80, 80, 0.08);
-    border: 1px solid rgba(255, 80, 80, 0.3);
-    border-left: 3px solid #f44747;
-    border-radius: 4px;
-    padding: 10px 12px;
-  }
-  .error-box .label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: #f44747;
-    font-weight: 600;
-    margin-bottom: 6px;
-  }
-  .error-box pre {
-    font-family: var(--vscode-editor-font-family, 'Courier New', monospace);
-    font-size: 11px;
-    color: #f48771;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 120px;
-    overflow-y: auto;
-    line-height: 1.5;
-  }
-
-  /* Loading */
-  .loading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 16px;
-    color: var(--vscode-descriptionForeground, #999);
-  }
-  .spinner {
-    width: 16px; height: 16px;
-    border: 2px solid rgba(255,255,255,0.1);
-    border-top-color: #569cd6;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    flex-shrink: 0;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* Result sections */
-  .section {
-    background: var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.04));
-    border: 1px solid var(--vscode-panel-border, #404040);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-  .section-header {
-    padding: 7px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.7px;
-    background: rgba(255,255,255,0.04);
-    border-bottom: 1px solid var(--vscode-panel-border, #404040);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .section-header.why { color: #dcdcaa; }
-  .section-header.fix { color: #4ec9b0; }
-  .section-header.code { color: #569cd6; }
-  .section-body {
-    padding: 12px;
-    line-height: 1.65;
-    font-size: 13px;
-    color: var(--vscode-editor-foreground, #d4d4d4);
-  }
-
-  /* Code block */
-  .code-block {
-    position: relative;
-    background: rgba(0,0,0,0.3);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-  .code-block pre {
-    font-family: var(--vscode-editor-font-family, 'Courier New', monospace);
-    font-size: 12px;
-    padding: 12px;
-    overflow-x: auto;
-    white-space: pre;
-    line-height: 1.6;
-    color: #d4d4d4;
-    max-height: 350px;
-    overflow-y: auto;
-  }
-  .code-actions {
-    display: flex;
-    gap: 8px;
-    padding: 8px 12px;
-    background: rgba(0,0,0,0.2);
-    border-top: 1px solid rgba(255,255,255,0.06);
-  }
-
-  /* Buttons */
-  .btn {
-    padding: 5px 14px;
-    border-radius: 3px;
-    border: none;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 500;
-    transition: opacity 0.15s;
-  }
-  .btn:hover { opacity: 0.85; }
-  .btn-primary {
-    background: #0e639c;
-    color: #fff;
-  }
-  .btn-secondary {
-    background: rgba(255,255,255,0.08);
-    color: var(--vscode-editor-foreground, #d4d4d4);
-    border: 1px solid rgba(255,255,255,0.12);
-  }
-
-  /* Type badge */
-  .type-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .type-code-error { background: rgba(244,71,71,0.2); color: #f44747; }
-  .type-dependency  { background: rgba(78,201,176,0.2); color: #4ec9b0; }
-  .type-other       { background: rgba(220,220,170,0.2); color: #dcdcaa; }
-
-  /* Empty / idle state */
-  .idle {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 200px;
-    gap: 12px;
-    color: var(--vscode-descriptionForeground, #888);
-    text-align: center;
-  }
-  .idle-icon { font-size: 36px; opacity: 0.5; }
-
-  /* Error state */
-  .api-error {
-    background: rgba(255, 140, 0, 0.08);
-    border: 1px solid rgba(255, 140, 0, 0.3);
-    border-radius: 4px;
-    padding: 12px;
-    color: #ce9178;
-    line-height: 1.6;
-    font-size: 12px;
-  }
-
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code-RRK</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
+      font-size: 13px;
+      background: var(--vscode-editor-background, #1e1e1e);
+      color: var(--vscode-editor-foreground, #d4d4d4);
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      background: var(--vscode-titleBar-activeBackground, #323233);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--vscode-panel-border, #404040);
+      flex-shrink: 0;
+    }
+    .header-icon { font-size: 18px; }
+    .header-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--vscode-titleBar-activeForeground, #fff);
+    }
+    .header-badge {
+      font-size: 10px;
+      background: rgba(86,156,214,0.2);
+      color: #569cd6;
+      border: 1px solid rgba(86,156,214,0.3);
+      border-radius: 10px;
+      padding: 2px 8px;
+      font-weight: 600;
+    }
+    .header-sub {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground, #999);
+      margin-left: auto;
+    }
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .error-box {
+      background: rgba(255,80,80,0.08);
+      border: 1px solid rgba(255,80,80,0.3);
+      border-left: 3px solid #f44747;
+      border-radius: 4px;
+      padding: 10px 12px;
+    }
+    .error-box .label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #f44747;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .error-box pre {
+      font-family: var(--vscode-editor-font-family, 'Courier New', monospace);
+      font-size: 11px;
+      color: #f48771;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px;
+      color: var(--vscode-descriptionForeground, #999);
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: #569cd6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .section {
+      background: var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.04));
+      border: 1px solid var(--vscode-panel-border, #404040);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .section-header {
+      padding: 7px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid var(--vscode-panel-border, #404040);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-header.why { color: #dcdcaa; }
+    .section-header.fix { color: #4ec9b0; }
+    .section-header.code { color: #569cd6; }
+    .section-body {
+      padding: 12px;
+      line-height: 1.65;
+      font-size: 13px;
+      color: var(--vscode-editor-foreground, #d4d4d4);
+    }
+    .code-block {
+      position: relative;
+      background: rgba(0,0,0,0.3);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .code-block pre {
+      font-family: var(--vscode-editor-font-family, 'Courier New', monospace);
+      font-size: 12px;
+      padding: 12px;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.6;
+      color: #d4d4d4;
+      max-height: 350px;
+      overflow-y: auto;
+    }
+    .code-actions {
+      display: flex;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.2);
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .btn {
+      padding: 5px 14px;
+      border-radius: 3px;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #0e639c; color: #fff; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      color: var(--vscode-editor-foreground, #d4d4d4);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .type-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .type-code-error { background: rgba(244,71,71,0.2); color: #f44747; }
+    .type-dependency { background: rgba(78,201,176,0.2); color: #4ec9b0; }
+    .type-other { background: rgba(220,220,170,0.2); color: #dcdcaa; }
+    .idle {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      gap: 12px;
+      color: var(--vscode-descriptionForeground, #888);
+      text-align: center;
+    }
+    .idle-icon { font-size: 36px; opacity: 0.5; }
+    .api-error {
+      background: rgba(255,140,0,0.08);
+      border: 1px solid rgba(255,140,0,0.3);
+      border-radius: 4px;
+      padding: 12px;
+      color: #ce9178;
+      line-height: 1.6;
+      font-size: 12px;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  </style>
 </head>
 <body>
-
-<div class="header">
-  <span class="header-icon">🎓</span>
-  <span class="header-title">Professor Raimal</span>
-  <span class="header-sub">AI Error Assistant • Free</span>
-</div>
-
-<div class="content" id="content">
-  <div class="idle">
-    <div class="idle-icon">🔍</div>
-    <div>Waiting for an error to analyze...</div>
-    <div style="font-size:11px">Run your code and I'll detect errors automatically</div>
+  <div class="header">
+    <span class="header-icon">⚡</span>
+    <span class="header-title">Code-RRK</span>
+    <span class="header-badge">v2.4.0</span>
+    <span class="header-sub">Professor Raimal Raja</span>
   </div>
-</div>
-
-<script>
-const vscode = acquireVsCodeApi();
-const GEMINI_API_KEY = 'AIzaSyCm0reF6dkgWAGQQofa6JOd_3X4byRVuzY';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-let currentCode = '';
-let currentLanguage = 'python';
-
-// Tell extension we're ready
-vscode.postMessage({ command: 'ready' });
-
-// Receive messages from extension
-window.addEventListener('message', async (event) => {
-  const msg = event.data;
-  if (msg.command === 'analyze') {
-    await analyze(msg.errorText, msg.fileInfo, msg.fileCode);
-  }
-});
-
-async function analyze(errorText, fileInfo, fileCode) {
-  const content = document.getElementById('content');
-
-  // Detect language from file info
-  if (fileInfo.includes('.py') || fileInfo.includes('python')) currentLanguage = 'python';
-  else if (fileInfo.includes('.js') || fileInfo.includes('javascript')) currentLanguage = 'javascript';
-  else if (fileInfo.includes('.ts') || fileInfo.includes('typescript')) currentLanguage = 'typescript';
-  else if (fileInfo.includes('.java')) currentLanguage = 'java';
-  else if (fileInfo.includes('.cpp') || fileInfo.includes('.c')) currentLanguage = 'cpp';
-  else if (fileInfo.includes('.cs')) currentLanguage = 'csharp';
-  else currentLanguage = 'code';
-
-  // Truncate error and code for prompt
-  const truncatedError = errorText.substring(0, 2000);
-  const truncatedCode = fileCode ? fileCode.substring(0, 1500) : '';
-
-  content.innerHTML = `
-    <div class="error-box">
-      <div class="label">⚡ Error Detected</div>
-      <pre>${escapeHtml(truncatedError)}</pre>
+  <div class="content" id="content">
+    <div class="idle">
+      <div class="idle-icon">🔍</div>
+      <div>Waiting for an error to analyze...</div>
+      <div style="font-size:11px">Run your code and I'll detect errors automatically</div>
     </div>
-    <div class="loading">
-      <div class="spinner"></div>
-      <span>Professor Raimal is analyzing your error...</span>
-    </div>
-  `;
+  </div>
 
-  const prompt = `You are Professor Raimal, an expert programming assistant embedded in VS Code. Analyze this error and respond ONLY with a valid JSON object (no markdown, no backticks, no extra text).
+  <script>
+    const vscode = acquireVsCodeApi();
+
+    const GEMINI_API_KEY = 'AIzaSyAhYpWL2jEKTCE0urWlra2sfY2896H0g9k';
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    let currentCode = '';
+    let currentLanguage = 'python';
+
+    // Tell extension we're ready
+    vscode.postMessage({ command: 'ready' });
+
+    // Receive messages from extension
+    window.addEventListener('message', async (event) => {
+      const msg = event.data;
+      if (msg.command === 'analyze') {
+        await analyze(msg.errorText, msg.fileInfo, msg.fileCode);
+      }
+    });
+
+    async function analyze(errorText, fileInfo, fileCode) {
+      const content = document.getElementById('content');
+
+      // Detect language from file info
+      if (fileInfo.includes('.py') || fileInfo.includes('python')) currentLanguage = 'python';
+      else if (fileInfo.includes('.js') || fileInfo.includes('javascript')) currentLanguage = 'javascript';
+      else if (fileInfo.includes('.ts') || fileInfo.includes('typescript')) currentLanguage = 'typescript';
+      else if (fileInfo.includes('.java')) currentLanguage = 'java';
+      else if (fileInfo.includes('.cpp') || fileInfo.includes('.c')) currentLanguage = 'cpp';
+      else if (fileInfo.includes('.cs')) currentLanguage = 'csharp';
+      else currentLanguage = 'code';
+
+      const truncatedError = errorText.substring(0, 2000);
+      const truncatedCode = fileCode ? fileCode.substring(0, 1500) : '';
+
+      content.innerHTML = `
+        <div class="error-box">
+          <div class="label">⚡ Error Detected</div>
+          <pre>${escapeHtml(truncatedError)}</pre>
+        </div>
+        <div class="loading">
+          <div class="spinner"></div>
+          <span>Code-RRK is analyzing your error with Gemini 2.5 Flash...</span>
+        </div>
+      `;
+
+      const prompt = `You are Code-RRK, an expert programming assistant embedded in VS Code.
+Analyze this error and respond ONLY with a valid JSON object (no markdown, no backticks, no extra text).
 
 Error from terminal:
 ${truncatedError}
 
 ${truncatedCode ? `Code from active file (${currentLanguage}):\n${truncatedCode}` : ''}
+
 ${fileInfo}
 
 Respond with EXACTLY this JSON structure:
@@ -288,173 +282,169 @@ Respond with EXACTLY this JSON structure:
   "severity": "low" or "medium" or "high"
 }`;
 
-  try {
-    const response = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 1500
+      try {
+        const response = await fetch(GEMINI_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 1500
+            }
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error?.message || `HTTP ${response.status}`);
         }
-      })
-    });
 
-    if (!response.ok) {
-      const errData = await response.json();
-      throw new Error(errData.error?.message || `HTTP ${response.status}`);
-    }
+        const data = await response.json();
+        let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-    const data = await response.json();
-    let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
-    // Strip any markdown code fences if Gemini adds them
-    rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        // Strip any markdown code fences
+        rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
-    let result;
-    try {
-      result = JSON.parse(rawText);
-    } catch(e) {
-      throw new Error('Could not parse Gemini response. Raw: ' + rawText.substring(0, 200));
-    }
+        let result;
+        try {
+          result = JSON.parse(rawText);
+        } catch(e) {
+          throw new Error('Could not parse Gemini response. Raw: ' + rawText.substring(0, 200));
+        }
 
-    currentCode = result.fixedCode || '';
-    renderResult(result, truncatedError);
+        currentCode = result.fixedCode || '';
+        renderResult(result, truncatedError);
 
-  } catch (err) {
-    content.innerHTML = `
-      <div class="error-box">
-        <div class="label">⚡ Error Detected</div>
-        <pre>${escapeHtml(truncatedError)}</pre>
-      </div>
-      <div class="api-error">
-        <strong>⚠️ Could not reach Gemini API</strong><br><br>
-        ${escapeHtml(err.message)}<br><br>
-        <strong>Possible causes:</strong><br>
-        • No internet connection<br>
-        • API key quota exceeded (free tier: 1,500 req/day)<br>
-        • Firewall blocking the request
-      </div>
-    `;
-  }
-}
-
-function renderResult(r, originalError) {
-  const content = document.getElementById('content');
-  
-  const badgeClass = r.errorType === 'dependency_error' ? 'type-dependency' 
-                   : r.errorType === 'code_error' ? 'type-code-error' 
-                   : 'type-other';
-  
-  const badgeLabel = r.errorType?.replace(/_/g, ' ') || 'error';
-
-  const severityColor = r.severity === 'high' ? '#f44747' 
-                      : r.severity === 'medium' ? '#dcdcaa' 
-                      : '#4ec9b0';
-
-  let fixSteps = (r.howToFix || 'No fix available.')
-    .split('\\n')
-    .filter(s => s.trim())
-    .map((s, i) => `<div style="margin-bottom:6px"><span style="color:#569cd6;font-weight:600;">${i+1}.</span> ${escapeHtml(s)}</div>`)
-    .join('');
-
-  let codeSection = '';
-  if (r.fixedCode && r.fixedCode.trim()) {
-    codeSection = `
-      <div class="section">
-        <div class="section-header code">
-          <span>💻</span> Fixed Code
-        </div>
-        <div class="code-block">
-          <pre id="codeBlock">${escapeHtml(r.fixedCode)}</pre>
-          <div class="code-actions">
-            <button class="btn btn-primary" onclick="applyFix()">⚡ Apply to File</button>
-            <button class="btn btn-secondary" onclick="copyCode()">📋 Copy</button>
+      } catch (err) {
+        content.innerHTML = `
+          <div class="error-box">
+            <div class="label">⚡ Error Detected</div>
+            <pre>${escapeHtml(truncatedError)}</pre>
           </div>
-        </div>
-      </div>
-    `;
-  }
+          <div class="api-error">
+            <strong>⚠️ Could not reach Gemini API</strong><br><br>
+            ${escapeHtml(err.message)}<br><br>
+            <strong>Possible causes:</strong><br>
+            • No internet connection<br>
+            • API key quota exceeded<br>
+            • Firewall blocking the request
+          </div>
+        `;
+      }
+    }
 
-  let depSection = '';
-  if (r.dependencyCommand && r.dependencyCommand.trim()) {
-    depSection = `
-      <div class="section">
-        <div class="section-header fix">
-          <span>📦</span> Install Required Package
-        </div>
-        <div class="section-body">
-          <div class="code-block">
-            <pre>${escapeHtml(r.dependencyCommand)}</pre>
-            <div class="code-actions">
-              <button class="btn btn-secondary" onclick="copyText('${escapeAttr(r.dependencyCommand)}')">📋 Copy Command</button>
+    function renderResult(r, originalError) {
+      const content = document.getElementById('content');
+
+      const badgeClass = r.errorType === 'dependency_error' ? 'type-dependency'
+                       : r.errorType === 'code_error' ? 'type-code-error'
+                       : 'type-other';
+      const badgeLabel = r.errorType?.replace(/_/g, ' ') || 'error';
+
+      const severityColor = r.severity === 'high' ? '#f44747'
+                          : r.severity === 'medium' ? '#dcdcaa'
+                          : '#4ec9b0';
+
+      let fixSteps = (r.howToFix || 'No fix available.')
+        .split('\\n')
+        .filter(s => s.trim())
+        .map((s, i) => `<div style="margin-bottom:6px"><span style="color:#569cd6;font-weight:600;">${i+1}.</span> ${escapeHtml(s)}</div>`)
+        .join('');
+
+      let codeSection = '';
+      if (r.fixedCode && r.fixedCode.trim()) {
+        codeSection = `
+          <div class="section">
+            <div class="section-header code">
+              <span>💻</span> Fixed Code
+            </div>
+            <div class="code-block">
+              <pre id="codeBlock">${escapeHtml(r.fixedCode)}</pre>
+              <div class="code-actions">
+                <button class="btn btn-primary" onclick="applyFix()">⚡ Apply Fix to File</button>
+                <button class="btn btn-secondary" onclick="copyCode()">📋 Copy</button>
+              </div>
             </div>
           </div>
+        `;
+      }
+
+      let depSection = '';
+      if (r.dependencyCommand && r.dependencyCommand.trim()) {
+        depSection = `
+          <div class="section">
+            <div class="section-header fix">
+              <span>📦</span> Install Required Package
+            </div>
+            <div class="section-body">
+              <div class="code-block">
+                <pre>${escapeHtml(r.dependencyCommand)}</pre>
+                <div class="code-actions">
+                  <button class="btn btn-secondary" onclick="copyText('${escapeAttr(r.dependencyCommand)}')">📋 Copy Command</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      content.innerHTML = `
+        <div class="error-box">
+          <div class="label" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>⚡ Error Detected</span>
+            <span style="color:${severityColor};font-size:10px;font-weight:600;">${(r.severity || 'medium').toUpperCase()} SEVERITY</span>
+          </div>
+          <div style="margin-bottom:6px;margin-top:2px;">
+            <span style="font-size:13px;font-weight:600;color:#f48771;">${escapeHtml(r.errorTitle || 'Unknown Error')}</span>
+            &nbsp;<span class="type-badge ${badgeClass}">${escapeHtml(badgeLabel)}</span>
+          </div>
         </div>
-      </div>
-    `;
-  }
+        <div class="section">
+          <div class="section-header why">
+            <span>🔍</span> Why This Happened
+          </div>
+          <div class="section-body">${escapeHtml(r.whyItHappened || 'No explanation available.')}</div>
+        </div>
+        <div class="section">
+          <div class="section-header fix">
+            <span>🛠️</span> How To Fix It
+          </div>
+          <div class="section-body">${fixSteps}</div>
+        </div>
+        ${depSection}
+        ${codeSection}
+      `;
+    }
 
-  content.innerHTML = `
-    <div class="error-box">
-      <div class="label" style="display:flex;align-items:center;justify-content:space-between;">
-        <span>⚡ Error Detected</span>
-        <span style="color:${severityColor};font-size:10px;font-weight:600;">${(r.severity || 'medium').toUpperCase()} SEVERITY</span>
-      </div>
-      <div style="margin-bottom:6px;margin-top:2px;">
-        <span style="font-size:13px;font-weight:600;color:#f48771;">${escapeHtml(r.errorTitle || 'Unknown Error')}</span>
-        &nbsp;<span class="type-badge ${badgeClass}">${escapeHtml(badgeLabel)}</span>
-      </div>
-    </div>
+    function applyFix() {
+      vscode.postMessage({ command: 'applyFix', code: currentCode, language: currentLanguage });
+    }
 
-    <div class="section">
-      <div class="section-header why">
-        <span>🔍</span> Why This Happened
-      </div>
-      <div class="section-body">${escapeHtml(r.whyItHappened || 'No explanation available.')}</div>
-    </div>
+    function copyCode() {
+      const block = document.getElementById('codeBlock');
+      if (block) {
+        vscode.postMessage({ command: 'copyToClipboard', text: block.textContent });
+      }
+    }
 
-    <div class="section">
-      <div class="section-header fix">
-        <span>🛠️</span> How To Fix It
-      </div>
-      <div class="section-body">${fixSteps}</div>
-    </div>
+    function copyText(text) {
+      vscode.postMessage({ command: 'copyToClipboard', text: text });
+    }
 
-    ${depSection}
-    ${codeSection}
-  `;
-}
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
 
-function applyFix() {
-  vscode.postMessage({ command: 'applyFix', code: currentCode, language: currentLanguage });
-}
-
-function copyCode() {
-  const block = document.getElementById('codeBlock');
-  if (block) {
-    vscode.postMessage({ command: 'copyToClipboard', text: block.textContent });
-  }
-}
-
-function copyText(text) {
-  vscode.postMessage({ command: 'copyToClipboard', text: text });
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function escapeAttr(str) {
-  if (!str) return '';
-  return String(str).replace(/'/g, "\\'");
-}
-</script>
+    function escapeAttr(str) {
+      if (!str) return '';
+      return String(str).replace(/'/g, "\\'");
+    }
+  </script>
 </body>
 </html>

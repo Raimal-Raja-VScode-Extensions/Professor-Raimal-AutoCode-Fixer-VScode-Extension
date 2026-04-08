@@ -1,15 +1,15 @@
 {
   "name": "professor-raimal-auto-code-fixer",
-  "displayName": "Professor Raimal Raja — AI Error Fixer",
+  "displayName": "Professor Raimal — AutoAI Error Fixer",
   "description": "Automatically detects terminal errors and fixes them using Gemini AI — free, no API key required.",
-  "version": "1.1.0",
+  "version": "2.5.1",
   "publisher": "Professor-Raimal",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.93.0"
   },
   "categories": ["Other", "Programming Languages"],
-  "keywords": ["error", "fix", "AI", "terminal", "debug", "gemini"],
+  "keywords": ["error", "fix", "AI", "terminal", "debug", "gemini", "code-rrk"],
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -17,44 +17,46 @@
   "contributes": {
     "commands": [
       {
-        "command": "professor-raimal-raja.fixError",
-        "title": "✨ Professor Raimal-Raja: Fix This Error"
+        "command": "professor-raimal.fixError",
+        "title": "✨ Professor Raimal: Fix This Error"
       },
       {
-        "command": "professor-raimal-raja.analyzeTerminal",
-        "title": "✨ Professor Raimal-Raja: Analyze Terminal"
+        "command": "professor-raimal.analyzeTerminal",
+        "title": "✨ Professor Raimal: Analyze Terminal"
+      },
+      {
+        "command": "professor-raimal.fixFromLink",
+        "title": "✨ Professor Raimal: Fix From Terminal Link"
       }
     ],
     "menus": {
       "terminal/context": [
         {
-          "command": "professor-raimal-raja.analyzeTerminal",
+          "command": "professor-raimal.analyzeTerminal",
           "group": "navigation"
         }
       ]
     },
     "configuration": {
-      "title": "Professor Raimal Raja",
+      "title": "Professor Raimal",
       "properties": {
-        "professorRaimal.autoDetect": {
+        "codeRRK.autoDetect": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically detect errors in the terminal"
+          "description": "Automatically detect errors in the terminal and light up the status bar"
         }
       }
     }
   },
   "scripts": {
-  "vscode:prepublish": "npm run compile",
-  "compile": "tsc -p ./",
-  "watch": "tsc -watch -p ./",
-  "watch:tsc": "tsc -watch -p ./",
-  "watch:esbuild": "tsc -watch -p ./",
-  "package": "vsce package",
-  "publish": "vsce publish"
-},
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
   "devDependencies": {
-   "@types/vscode": "^1.93.0",
+    "@types/vscode": "^1.93.0",
     "@types/node": "^18.0.0",
     "typescript": "^5.0.0",
     "@vscode/vsce": "^2.22.0"
