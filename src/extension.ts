@@ -7,34 +7,82 @@ let statusBarItem: vscode.StatusBarItem;
 let panel: vscode.WebviewPanel | undefined;
 let lastCapturedError = '';
 
+// Tracks the last real code editor the user had focus on. Needed because once the
+// CoderAI webview panel gets focus, vscode.window.activeTextEditor becomes
+// undefined (a webview isn't a text editor), which was breaking "Apply Fix".
+let lastActiveEditor: vscode.TextEditor | undefined;
+
+// Dedupe/cooldown for the auto-popup notification so the same error occurring
+// again (e.g. re-running the same failing script) doesn't spam a new toast
+// every single time.
+let lastNotifiedError = '';
+let lastNotifiedAt = 0;
+const NOTIFY_COOLDOWN_MS = 8000;
+
+// All AI calls go through your own backend — no provider key ships in the extension.
+const CODERAI_PROXY_URL = 'https://coder.kvtech.net/api/generate.php';
+
 export function activate(context: vscode.ExtensionContext) {
-    outputChannel = vscode.window.createOutputChannel('Code-RRK');
+    outputChannel = vscode.window.createOutputChannel('CoderAI');
 
     // ── Status bar button ────────────────────────────────────────────────────
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBarItem.text = '$(sparkle) Code-RRK';
+    statusBarItem.text = '$(sparkle) CoderAI';
     statusBarItem.tooltip = 'Click to analyze terminal for errors';
-    statusBarItem.command = 'code-rrk.analyzeTerminal';
+    statusBarItem.command = 'coderai.analyzeTerminal';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
+    // Keep track of the last real text editor the user was working in, since
+    // vscode.window.activeTextEditor goes undefined once the webview panel
+    // steals focus (e.g. when clicking "Apply Fix to File").
+    if (vscode.window.activeTextEditor) {
+        lastActiveEditor = vscode.window.activeTextEditor;
+    }
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+            if (editor) {
+                lastActiveEditor = editor;
+            }
+        })
+    );
+
     // ── Commands ─────────────────────────────────────────────────────────────
     context.subscriptions.push(
-        vscode.commands.registerCommand('code-rrk.fixError', (errorText: string) => {
+        vscode.commands.registerCommand('coderai.fixError', (errorText: string) => {
             analyzeAndFix(context, errorText);
         })
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('code-rrk.analyzeTerminal', () => {
+        vscode.commands.registerCommand('coderai.analyzeTerminal', () => {
             captureAndAnalyzeTerminal(context);
         })
     );
 
     // Internal command called by the terminal link provider
     context.subscriptions.push(
-        vscode.commands.registerCommand('code-rrk.fixFromLink', (errorText: string) => {
+        vscode.commands.registerCommand('coderai.fixFromLink', (errorText: string) => {
             analyzeAndFix(context, errorText);
+        })
+    );
+
+    // Open settings shortcut so users can paste their CoderAI API key
+    context.subscriptions.push(
+        vscode.commands.registerCommand('coderai.setApiKey', async () => {
+            const config = vscode.workspace.getConfiguration('coderAI');
+            const current = config.get<string>('apiKey', '');
+            const input = await vscode.window.showInputBox({
+                prompt: 'Enter your CoderAI API key',
+                placeHolder: 'coderai-sk-...',
+                value: current,
+                password: true,
+                ignoreFocusOut: true
+            });
+            if (input !== undefined) {
+                await config.update('apiKey', input, vscode.ConfigurationTarget.Global);
+                vscode.window.showInformationMessage('✅ CoderAI API key saved.');
+            }
         })
     );
 
@@ -42,7 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Fires when a shell command finishes. If exit code ≠ 0, we read its output.
     context.subscriptions.push(
         vscode.window.onDidEndTerminalShellExecution(async (event) => {
-            const config = vscode.workspace.getConfiguration('codeRRK');
+            const config = vscode.workspace.getConfiguration('coderAI');
             if (!config.get('autoDetect', true)) return;
 
             // exit code 0 = success, undefined = unknown, anything else = error
@@ -65,9 +113,24 @@ export function activate(context: vscode.ExtensionContext) {
 
             if (textToAnalyze && looksLikeError(textToAnalyze)) {
                 lastCapturedError = textToAnalyze;
+
+                // Always light up the status bar so the user can still click it
+                // manually, but only pop the toast notification if this is a
+                // genuinely new error (or the cooldown has passed) — otherwise
+                // re-running the same broken command spams a new popup every time.
                 flashStatusBar();
+
+                const now = Date.now();
+                const isSameAsLast = textToAnalyze === lastNotifiedError;
+                const withinCooldown = now - lastNotifiedAt < NOTIFY_COOLDOWN_MS;
+                if (isSameAsLast && withinCooldown) {
+                    return;
+                }
+                lastNotifiedError = textToAnalyze;
+                lastNotifiedAt = now;
+
                 vscode.window.showInformationMessage(
-                    '🔴 Code-RRK detected an error in your terminal.',
+                    '🔴 CoderAI detected an error in your terminal.',
                     'Fix It Now',
                     'Dismiss'
                 ).then(selection => {
@@ -82,14 +145,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── METHOD 2: Terminal Link Provider ────────────────────────────────────
     // Scans every line printed to the terminal. When it matches an error pattern
-    // it makes that line clickable — user sees "⚡ Ask RRK" as a hyperlink.
+    // it makes that line clickable — user sees "⚡ Ask CoderAI" as a hyperlink.
     context.subscriptions.push(
         vscode.window.registerTerminalLinkProvider({
             provideTerminalLinks(
                 ctx: vscode.TerminalLinkContext,
                 _token: vscode.CancellationToken
             ): vscode.TerminalLink[] {
-                const config = vscode.workspace.getConfiguration('codeRRK');
+                const config = vscode.workspace.getConfiguration('coderAI');
                 if (!config.get('autoDetect', true)) return [];
 
                 const line = stripAnsi(ctx.line);
@@ -102,11 +165,11 @@ export function activate(context: vscode.ExtensionContext) {
                 return [{
                     startIndex: 0,
                     length: ctx.line.length,
-                    tooltip: '⚡ Ask Code-RRK to fix this error'
+                    tooltip: '⚡ Ask CoderAI to fix this error'
                 }];
             },
             handleTerminalLink(_link: vscode.TerminalLink) {
-                vscode.commands.executeCommand('code-rrk.fixFromLink', lastCapturedError);
+                vscode.commands.executeCommand('coderai.fixFromLink', lastCapturedError);
             }
         })
     );
@@ -122,19 +185,19 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    outputChannel.appendLine('Code-RRK v2.4.0 active — watching terminal via shell integration + link provider 👀');
+    outputChannel.appendLine('CoderAI v3.0.1 active — watching terminal via shell integration + link provider 👀');
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function flashStatusBar() {
-    statusBarItem.text = '$(warning) Error — Ask RRK';
+    statusBarItem.text = '$(warning) Error — Ask CoderAI';
     statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    statusBarItem.tooltip = 'Error detected! Click to fix with Code-RRK';
+    statusBarItem.tooltip = 'Error detected! Click to fix with CoderAI';
 }
 
 function resetStatusBar() {
-    statusBarItem.text = '$(sparkle) Code-RRK';
+    statusBarItem.text = '$(sparkle) CoderAI';
     statusBarItem.backgroundColor = undefined;
     statusBarItem.tooltip = 'Click to analyze terminal for errors';
 }
@@ -162,9 +225,13 @@ function analyzeAndFix(context: vscode.ExtensionContext, errorText: string) {
         vscode.window.showWarningMessage('No error text to analyze.');
         return;
     }
+
     resetStatusBar();
 
     const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor) {
+        lastActiveEditor = activeEditor;
+    }
     const fileInfo = activeEditor
         ? `Active file: ${path.basename(activeEditor.document.fileName)} (${activeEditor.document.languageId})`
         : 'No file open';
@@ -185,8 +252,8 @@ function showOverlay(
         panel.reveal(vscode.ViewColumn.Beside);
     } else {
         panel = vscode.window.createWebviewPanel(
-            'codeRRK',
-            '✨ Code-RRK',
+            'coderAI',
+            '✨ CoderAI',
             vscode.ViewColumn.Beside,
             {
                 enableScripts: true,
@@ -205,7 +272,9 @@ function showOverlay(
                 command: 'analyze',
                 errorText,
                 fileInfo,
-                fileCode
+                fileCode,
+                proxyUrl: CODERAI_PROXY_URL,
+                model: 'Professor-Raimal'
             });
         }
         if (message.command === 'applyFix') {
@@ -219,31 +288,47 @@ function showOverlay(
 }
 
 async function applyCodeFix(fixedCode: string, _language: string) {
-    const editor = vscode.window.activeTextEditor;
+    // vscode.window.activeTextEditor is undefined right now because the webview
+    // panel (where the "Apply Fix" button lives) currently has focus. Fall back
+    // to the last real text editor the user was in.
+    const editor = vscode.window.activeTextEditor || lastActiveEditor;
     if (!editor) {
-        vscode.window.showWarningMessage('No active editor. Open the file you want to fix first.');
+        vscode.window.showWarningMessage('No active editor. Open the file you want to fix first, then try again.');
         return;
     }
 
+    // Bring the target editor back into focus so the QuickPick and the resulting
+    // edit are clearly applied to the right file, and the user can see it happen.
+    const targetDoc = editor.document;
+    const shownEditor = await vscode.window.showTextDocument(targetDoc, {
+        viewColumn: editor.viewColumn,
+        preserveFocus: false,
+        preview: false
+    });
+
     const choice = await vscode.window.showQuickPick(
         ['Replace entire file content', 'Insert at cursor', 'Cancel'],
-        { placeHolder: 'How should Code-RRK apply the fix?' }
+        { placeHolder: 'How should CoderAI apply the fix?' }
     );
     if (!choice || choice === 'Cancel') return;
 
     const edit = new vscode.WorkspaceEdit();
     if (choice === 'Replace entire file content') {
         const fullRange = new vscode.Range(
-            editor.document.positionAt(0),
-            editor.document.positionAt(editor.document.getText().length)
+            targetDoc.positionAt(0),
+            targetDoc.positionAt(targetDoc.getText().length)
         );
-        edit.replace(editor.document.uri, fullRange, fixedCode);
+        edit.replace(targetDoc.uri, fullRange, fixedCode);
     } else {
-        edit.insert(editor.document.uri, editor.selection.active, '\n' + fixedCode + '\n');
+        edit.insert(targetDoc.uri, shownEditor.selection.active, '\n' + fixedCode + '\n');
     }
 
-    await vscode.workspace.applyEdit(edit);
-    vscode.window.showInformationMessage('✅ Code-RRK applied the fix!');
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (applied) {
+        vscode.window.showInformationMessage('✅ CoderAI applied the fix!');
+    } else {
+        vscode.window.showErrorMessage('⚠️ CoderAI could not apply the fix to the file.');
+    }
 }
 
 function looksLikeError(text: string): boolean {

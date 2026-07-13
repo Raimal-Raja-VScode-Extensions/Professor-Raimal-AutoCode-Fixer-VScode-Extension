@@ -3,16 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Code-RRK</title>
+  <title>CoderAI</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+    }
     body {
       font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
       font-size: 13px;
       background: var(--vscode-editor-background, #1e1e1e);
       color: var(--vscode-editor-foreground, #d4d4d4);
       padding: 0;
-      height: 100vh;
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -48,7 +50,9 @@
     }
     .content {
       flex: 1;
+      min-height: 0; /* critical: without this a flex child won't scroll, it'll just overflow the panel */
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 16px;
       display: flex;
       flex-direction: column;
@@ -202,9 +206,9 @@
 </head>
 <body>
   <div class="header">
-    <span class="header-icon">⚡</span>
-    <span class="header-title">Code-RRK</span>
-    <span class="header-badge">v2.4.0</span>
+    <span class="header-icon">✨</span>
+    <span class="header-title">CoderAI</span>
+    <span class="header-badge">v3.0.1</span>
     <span class="header-sub">Professor Raimal Raja</span>
   </div>
   <div class="content" id="content">
@@ -214,13 +218,10 @@
       <div style="font-size:11px">Run your code and I'll detect errors automatically</div>
     </div>
   </div>
-
   <script>
     const vscode = acquireVsCodeApi();
-
-    const GEMINI_API_KEY = 'AIzaSyAhYpWL2jEKTCE0urWlra2sfY2896H0g9k';
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
+    // No API key lives here anymore — the extension backend (coder.kvtech.net)
+    // holds the real provider key server-side. We only receive a proxy URL.
     let currentCode = '';
     let currentLanguage = 'python';
 
@@ -231,11 +232,11 @@
     window.addEventListener('message', async (event) => {
       const msg = event.data;
       if (msg.command === 'analyze') {
-        await analyze(msg.errorText, msg.fileInfo, msg.fileCode);
+        await analyze(msg.errorText, msg.fileInfo, msg.fileCode, msg.proxyUrl, msg.model);
       }
     });
 
-    async function analyze(errorText, fileInfo, fileCode) {
+    async function analyze(errorText, fileInfo, fileCode, proxyUrl, model) {
       const content = document.getElementById('content');
 
       // Detect language from file info
@@ -257,65 +258,48 @@
         </div>
         <div class="loading">
           <div class="spinner"></div>
-          <span>Code-RRK is analyzing your error with Gemini 2.5 Flash...</span>
+          <span>CoderAI is analyzing your error with Professor-Raimal...</span>
         </div>
       `;
 
-      const prompt = `You are Code-RRK, an expert programming assistant embedded in VS Code.
-Analyze this error and respond ONLY with a valid JSON object (no markdown, no backticks, no extra text).
-
-Error from terminal:
-${truncatedError}
-
-${truncatedCode ? `Code from active file (${currentLanguage}):\n${truncatedCode}` : ''}
-
-${fileInfo}
-
-Respond with EXACTLY this JSON structure:
-{
-  "errorType": "code_error" or "dependency_error" or "configuration_error" or "permission_error" or "other",
-  "errorTitle": "Short title of what went wrong (max 8 words)",
-  "whyItHappened": "Clear explanation of why this error occurred (2-4 sentences, no jargon)",
-  "howToFix": "Step by step fix instructions. Use \\n for line breaks between steps.",
-  "fixedCode": "Complete corrected code if applicable, otherwise empty string",
-  "dependencyCommand": "npm install X or pip install X if needed, otherwise empty string",
-  "severity": "low" or "medium" or "high"
-}`;
-
       try {
-        const response = await fetch(GEMINI_URL, {
+        // The proxy is expected to return EXACTLY this JSON shape:
+        // {
+        //   "errorType": "code_error" | "dependency_error" | "configuration_error" | "permission_error" | "other",
+        //   "errorTitle": "...",
+        //   "whyItHappened": "...",
+        //   "howToFix": "step 1\\nstep 2\\n...",
+        //   "fixedCode": "...",
+        //   "dependencyCommand": "...",
+        //   "severity": "low" | "medium" | "high"
+        // }
+        // Your PHP proxy is responsible for calling the underlying LLM
+        // (Professor-Raimal) and normalizing its output to this shape.
+        const response = await fetch(proxyUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.2,
-              maxOutputTokens: 1500
-            }
+            model: model || 'Professor-Raimal',
+            errorText: truncatedError,
+            fileCode: truncatedCode,
+            fileInfo: fileInfo,
+            language: currentLanguage
           })
         });
 
         if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error?.message || `HTTP ${response.status}`);
+          let errMsg = `HTTP ${response.status}`;
+          try {
+            const errData = await response.json();
+            errMsg = errData.error?.message || errData.message || errMsg;
+          } catch (_) { /* body wasn't JSON, keep default message */ }
+          throw new Error(errMsg);
         }
 
-        const data = await response.json();
-        let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-        // Strip any markdown code fences
-        rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-        let result;
-        try {
-          result = JSON.parse(rawText);
-        } catch(e) {
-          throw new Error('Could not parse Gemini response. Raw: ' + rawText.substring(0, 200));
-        }
+        const result = await response.json();
 
         currentCode = result.fixedCode || '';
         renderResult(result, truncatedError);
-
       } catch (err) {
         content.innerHTML = `
           <div class="error-box">
@@ -323,11 +307,12 @@ Respond with EXACTLY this JSON structure:
             <pre>${escapeHtml(truncatedError)}</pre>
           </div>
           <div class="api-error">
-            <strong>⚠️ Could not reach Gemini API</strong><br><br>
+            <strong>⚠️ Could not reach CoderAI backend</strong><br><br>
             ${escapeHtml(err.message)}<br><br>
             <strong>Possible causes:</strong><br>
             • No internet connection<br>
-            • API key quota exceeded<br>
+            • coder.kvtech.net is temporarily down<br>
+            • Backend rate limit reached<br>
             • Firewall blocking the request
           </div>
         `;
@@ -336,12 +321,10 @@ Respond with EXACTLY this JSON structure:
 
     function renderResult(r, originalError) {
       const content = document.getElementById('content');
-
       const badgeClass = r.errorType === 'dependency_error' ? 'type-dependency'
                        : r.errorType === 'code_error' ? 'type-code-error'
                        : 'type-other';
       const badgeLabel = r.errorType?.replace(/_/g, ' ') || 'error';
-
       const severityColor = r.severity === 'high' ? '#f44747'
                           : r.severity === 'medium' ? '#dcdcaa'
                           : '#4ec9b0';
@@ -420,18 +403,15 @@ Respond with EXACTLY this JSON structure:
     function applyFix() {
       vscode.postMessage({ command: 'applyFix', code: currentCode, language: currentLanguage });
     }
-
     function copyCode() {
       const block = document.getElementById('codeBlock');
       if (block) {
         vscode.postMessage({ command: 'copyToClipboard', text: block.textContent });
       }
     }
-
     function copyText(text) {
       vscode.postMessage({ command: 'copyToClipboard', text: text });
     }
-
     function escapeHtml(str) {
       if (!str) return '';
       return String(str)
@@ -440,7 +420,6 @@ Respond with EXACTLY this JSON structure:
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
     }
-
     function escapeAttr(str) {
       if (!str) return '';
       return String(str).replace(/'/g, "\\'");
