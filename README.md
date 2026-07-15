@@ -34,7 +34,7 @@ Or click the **CoderAI** button in the status bar at any time.
 | Setting | Default | Description |
 |---|---|---|
 | `coderAI.autoDetect` | `true` | Auto-detect errors and warnings in terminal output |
-| `coderAI.apiKey` | `""` | Your CoderAI API key, used to call the Professor-Raimal model |
+| `coderAI.apiKey` | `""` | CoderAI API key, used to call the Professor-Raimal model |
 
 ## 📦 Installation
 
@@ -71,7 +71,6 @@ Patterns detected include (but are not limited to):
 ## Requirements
 
 - Internet connection required
-- A CoderAI API key (set via `CoderAI: Set API Key`)
 
 ## License
 
