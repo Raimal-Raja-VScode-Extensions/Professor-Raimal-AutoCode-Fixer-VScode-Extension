@@ -1,12 +1,12 @@
 # CoderAI - Auto Bug Fixer
 
-> By **Professor Raimal Raja** | v3.0.1 | AI Powered tool
+> By **Professor Raimal Raja** | v3.1.1 | AI Powered tool
 
-Automatically detects errors in your VS Code terminal and fixes them using CoderAI, powered by the **Professor-Raimal** model.
+Automatically detects errors and warnings in your VS Code terminal and fixes them using CoderAI, powered by the **Professor-Raimal** model.
 
 ## Features
 
-- ⚡ Auto-detects errors in your terminal output
+- ⚡ Auto-detects errors *and warnings* in your terminal output
 - 🔍 Shows **why** the error happened in plain English
 - 🛠️ Provides step-by-step fix instructions
 - 💻 Generates corrected code you can apply with one click (**Apply Fix to File**)
@@ -15,7 +15,7 @@ Automatically detects errors in your VS Code terminal and fixes them using Coder
 
 ## How To Use
 
-1. Run your code and get an error
+1. Run your code and get an error (or warning)
 2. A notification pops up: **"Fix It Now"** — click it
 3. The *CoderAI* panel opens beside your editor
 4. Get an instant AI-powered explanation and fix
@@ -33,7 +33,7 @@ Or click the **CoderAI** button in the status bar at any time.
 
 | Setting | Default | Description |
 |---|---|---|
-| `coderAI.autoDetect` | `true` | Auto-detect errors in terminal output |
+| `coderAI.autoDetect` | `true` | Auto-detect errors and warnings in terminal output |
 | `coderAI.apiKey` | `""` | Your CoderAI API key, used to call the Professor-Raimal model |
 
 ## 📦 Installation
@@ -43,7 +43,7 @@ Or click the **CoderAI** button in the status bar at any time.
 1. Open VS Code
 2. Press `Ctrl+P` and run:
    ```
-   ext install Professor-Raimal-Raja.coderai-auto-bug-fixer
+   ext install RaimalRaja.coderai-auto-bug-fixer
    ```
 3. Reload VS Code
 
@@ -51,7 +51,7 @@ Or click the **CoderAI** button in the status bar at any time.
 
 ```bash
 # Download the latest .vsix from Releases
-code --install-extension coderai-auto-bug-fixer-3.0.1.vsix
+code --install-extension coderai-auto-bug-fixer-3.1.1.vsix
 ```
 
 ```
@@ -62,9 +62,10 @@ After error:   ⚠ Error detected — Ask me   ← click this
 Patterns detected include (but are not limited to):
 
 - Python: `TypeError`, `ValueError`, `SyntaxError`, `ImportError`, `ModuleNotFoundError`, `Traceback`
-- JavaScript/Node: `Cannot find module`, `npm ERR!`, `UnhandledPromiseRejection`, `ReferenceError`
+- JavaScript/Node: `Cannot find module`, `npm ERR!`, `npm WARN`, `UnhandledPromiseRejection`, `ReferenceError`
 - Java: `java.lang.*Exception`, stack traces
 - C/C++: `Segmentation fault`, `undefined reference`
+- Warnings: `warning:`, `deprecated`, `DeprecationWarning`
 - General: `Permission denied`, `command not found`, `failed to compile`
 
 ## Requirements
@@ -80,7 +81,7 @@ MIT
 
 Made with ❤️ by **Professor Raimal Raja**
 
-[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Professor-Raimal-Raja.coderai-auto-bug-fixer)
+[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=RaimalRaja.coderai-auto-bug-fixer)
 · [Report a Bug](https://github.com/Raimal-Raja-VScode-Extensions/CoderAI-Auto-Bug-Fixer-VScode-Extension/issues)
 · [Request a Feature](https://github.com/Raimal-Raja-VScode-Extensions/CoderAI-Auto-Bug-Fixer-VScode-Extension/issues)
 

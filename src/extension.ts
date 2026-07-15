@@ -19,6 +19,12 @@ let lastNotifiedError = '';
 let lastNotifiedAt = 0;
 const NOTIFY_COOLDOWN_MS = 8000;
 
+// Holds the data for whichever analyze request is currently "in flight" to the
+// webview. The webview panel's onDidReceiveMessage handler is registered ONCE
+// per panel lifetime (see showOverlay) and reads from this variable when the
+// page reports it's ready, instead of a new listener being created per call.
+let pendingAnalysis: { errorText: string; fileInfo: string; fileCode: string } | null = null;
+
 // All AI calls go through your own backend — no provider key ships in the extension.
 const CODERAI_PROXY_URL = 'https://coder.kvtech.net/api/generate.php';
 
@@ -87,14 +93,19 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // ── METHOD 1: Shell Integration (VS Code 1.93+) ──────────────────────────
-    // Fires when a shell command finishes. If exit code ≠ 0, we read its output.
+    // Fires when a shell command finishes.
+    //
+    // FIX: previously this returned immediately when event.exitCode === 0,
+    // which meant any command that *succeeds* but prints a warning
+    // (deprecation warnings, lint warnings, compiler warnings, etc.) was never
+    // even inspected — breaking the "error OR warning" auto-detect
+    // requirement, since warnings almost always exit with code 0. We now
+    // always read the output and let looksLikeError() (which now also
+    // recognizes warning patterns) decide.
     context.subscriptions.push(
         vscode.window.onDidEndTerminalShellExecution(async (event) => {
             const config = vscode.workspace.getConfiguration('coderAI');
             if (!config.get('autoDetect', true)) return;
-
-            // exit code 0 = success, undefined = unknown, anything else = error
-            if (event.exitCode === 0) return;
 
             let output = '';
             try {
@@ -116,8 +127,9 @@ export function activate(context: vscode.ExtensionContext) {
 
                 // Always light up the status bar so the user can still click it
                 // manually, but only pop the toast notification if this is a
-                // genuinely new error (or the cooldown has passed) — otherwise
-                // re-running the same broken command spams a new popup every time.
+                // genuinely new error/warning (or the cooldown has passed) —
+                // otherwise re-running the same broken command spams a new
+                // popup every time.
                 flashStatusBar();
 
                 const now = Date.now();
@@ -144,8 +156,8 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // ── METHOD 2: Terminal Link Provider ────────────────────────────────────
-    // Scans every line printed to the terminal. When it matches an error pattern
-    // it makes that line clickable — user sees "⚡ Ask CoderAI" as a hyperlink.
+    // Scans every line printed to the terminal. When it matches an error/warning
+    // pattern it makes that line clickable — user sees "⚡ Ask CoderAI" as a hyperlink.
     context.subscriptions.push(
         vscode.window.registerTerminalLinkProvider({
             provideTerminalLinks(
@@ -185,7 +197,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    outputChannel.appendLine('CoderAI v3.0.1 active — watching terminal via shell integration + link provider 👀');
+    outputChannel.appendLine('CoderAI v3.1.1 active — watching terminal via shell integration + link provider 👀');
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -242,37 +254,100 @@ function analyzeAndFix(context: vscode.ExtensionContext, errorText: string) {
     showOverlay(context, errorText, fileInfo, activeFileCode);
 }
 
+function getNonce(): string {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
+
+function renderWebviewHtml(context: vscode.ExtensionContext, webview: vscode.Webview): string {
+    const webviewPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'webview.html');
+
+    // FIX: this used to be a bare fs.readFileSync with no error handling. If
+    // media/webview.html isn't shipped at exactly this path (e.g. excluded by
+    // a broken .vscodeignore, or the packaged .vsix was built before the file
+    // was added), this throws ENOENT. Since callers didn't catch it, the panel
+    // would already be created (blank) and this assignment would fail
+    // silently from the user's perspective — no error dialog, no fixed code,
+    // no Apply button, nothing to scroll, because there was never any content
+    // rendered in the first place. Surface a real, visible error instead.
+    let html: string;
+    try {
+        html = fs.readFileSync(webviewPath.fsPath, 'utf8');
+    } catch (err) {
+        const message = `CoderAI could not load its panel UI from ${webviewPath.fsPath}. ` +
+            `Make sure media/webview.html is present in the installed extension. (${(err as Error).message})`;
+        outputChannel.appendLine(message);
+        vscode.window.showErrorMessage(message);
+        return `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:16px;">
+            <h3>⚠️ CoderAI failed to load</h3><p>${escapeHtmlServer(message)}</p></body></html>`;
+    }
+
+    const nonce = getNonce();
+    // Fill in the CSP placeholders so the webview only allows the nonce'd
+    // inline script and can only reach the CoderAI proxy — not arbitrary
+    // scripts or endpoints.
+    html = html
+        .replace(/\$\{cspSource\}/g, webview.cspSource)
+        .replace(/\$\{nonce\}/g, nonce);
+    return html;
+}
+
+function escapeHtmlServer(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 function showOverlay(
     context: vscode.ExtensionContext,
     errorText: string,
     fileInfo: string,
     fileCode: string
 ) {
+    // Stash the data for this request; the (single, persistent) message
+    // handler below reads it once the page signals it's ready.
+    pendingAnalysis = { errorText, fileInfo, fileCode };
+
     if (panel) {
         panel.reveal(vscode.ViewColumn.Beside);
-    } else {
-        panel = vscode.window.createWebviewPanel(
-            'coderAI',
-            '✨ CoderAI',
-            vscode.ViewColumn.Beside,
-            {
-                enableScripts: true,
-                localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
-            }
-        );
-        panel.onDidDispose(() => { panel = undefined; });
+        // Reload the page content so it resets to a fresh loading state and
+        // re-fires 'ready' for this new request. NOTE: we do NOT re-register
+        // onDidReceiveMessage here — see the "else" branch below for why.
+        panel.webview.html = renderWebviewHtml(context, panel.webview);
+        return;
     }
 
-    const webviewPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'webview.html');
-    panel.webview.html = fs.readFileSync(webviewPath.fsPath, 'utf8');
+    panel = vscode.window.createWebviewPanel(
+        'coderAI',
+        '✨ CoderAI',
+        vscode.ViewColumn.Beside,
+        {
+            enableScripts: true,
+            localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
+        }
+    );
+    panel.onDidDispose(() => { panel = undefined; });
+    panel.webview.html = renderWebviewHtml(context, panel.webview);
 
+    // FIX: this listener is now registered exactly once per panel lifetime.
+    // Previously, showOverlay() re-registered a new onDidReceiveMessage
+    // listener on every single analyze call (even when the panel already
+    // existed), stacking duplicate listeners. That meant after using the
+    // extension more than once, clicking "Apply Fix to File" or "Copy" would
+    // fire the same action multiple times (multiple QuickPicks, the same
+    // edit applied repeatedly).
     panel.webview.onDidReceiveMessage(async (message) => {
-        if (message.command === 'ready') {
+        if (message.command === 'ready' && pendingAnalysis) {
             panel!.webview.postMessage({
                 command: 'analyze',
-                errorText,
-                fileInfo,
-                fileCode,
+                errorText: pendingAnalysis.errorText,
+                fileInfo: pendingAnalysis.fileInfo,
+                fileCode: pendingAnalysis.fileCode,
                 proxyUrl: CODERAI_PROXY_URL,
                 model: 'Professor-Raimal'
             });
@@ -353,6 +428,15 @@ function looksLikeError(text: string): boolean {
         /\berror\b.*line \d+/i,
         /at .+:\d+:\d+/,
         /exit code [1-9]/i,
+        // FIX: added warning patterns — the feature spec calls for detecting
+        // "any error OR warning", but none of the original patterns matched
+        // warnings, and warnings usually exit 0 (see onDidEndTerminalShellExecution
+        // fix above), so this path never even got exercised before.
+        /\bwarning\b/i,
+        /\bwarn:/i,
+        /npm warn/i,
+        /deprecationwarning/i,
+        /\bdeprecated\b/i,
     ];
     return errorPatterns.some(p => p.test(text));
 }

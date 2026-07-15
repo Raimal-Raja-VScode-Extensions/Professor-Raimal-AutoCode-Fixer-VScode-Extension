@@ -3,30 +3,53 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--
+    FIX: added a Content-Security-Policy. Previously there was none, which is
+    a known VS Code anti-pattern for webviews with enableScripts: true — it
+    logs a warning and gives the page more latitude than it needs. The
+    ${cspSource} / ${nonce} placeholders are filled in by extension.ts
+    (renderWebviewHtml) each time this file is loaded into the panel. This
+    also pins network access to just the CoderAI proxy.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 img-src ${cspSource} https: data:;
+                 style-src 'unsafe-inline' ${cspSource};
+                 script-src 'nonce-${nonce}';
+                 connect-src https://coder.kvtech.net;">
   <title>CoderAI</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       height: 100%;
+      overflow: hidden;
     }
     body {
       font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
       font-size: 13px;
       background: var(--vscode-editor-background, #1e1e1e);
       color: var(--vscode-editor-foreground, #d4d4d4);
-      padding: 0;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
+      /*
+        FIX: switched from flex (header + flex:1 content) to absolute
+        positioning. The flex approach was CSS-correct, but this is the more
+        bulletproof pattern for VS Code webviews — it doesn't depend on the
+        percentage-height chain from <html> down through the panel's iframe
+        actually resolving the way it's supposed to. `position: relative`
+        here establishes the containing block that .header and .content
+        position against below.
+      */
+      position: relative;
     }
     .header {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 44px;
       background: var(--vscode-titleBar-activeBackground, #323233);
-      padding: 10px 16px;
+      padding: 0 16px;
       display: flex;
       align-items: center;
       gap: 10px;
       border-bottom: 1px solid var(--vscode-panel-border, #404040);
-      flex-shrink: 0;
     }
     .header-icon { font-size: 18px; }
     .header-title {
@@ -48,9 +71,16 @@
       color: var(--vscode-descriptionForeground, #999);
       margin-left: auto;
     }
+    /*
+      FIX: .content is now absolutely positioned to fill everything below the
+      44px header, with its own scroll. Because top/right/bottom/left are all
+      pinned, its height is fully deterministic — there's no ambiguity left
+      for the browser to get wrong, unlike flex:1 + min-height:0 which
+      depends on the flex container itself having a resolved height first.
+    */
     .content {
-      flex: 1;
-      min-height: 0; /* critical: without this a flex child won't scroll, it'll just overflow the panel */
+      position: absolute;
+      top: 44px; left: 0; right: 0; bottom: 0;
       overflow-y: auto;
       overflow-x: hidden;
       padding: 16px;
@@ -199,16 +229,22 @@
       line-height: 1.6;
       font-size: 12px;
     }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.25);
+      border-radius: 5px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); background-clip: padding-box; }
   </style>
 </head>
 <body>
   <div class="header">
     <span class="header-icon">✨</span>
     <span class="header-title">CoderAI</span>
-    <span class="header-badge">v3.0.1</span>
+    <span class="header-badge">v3.1.1</span>
     <span class="header-sub">Professor Raimal Raja</span>
   </div>
   <div class="content" id="content">
@@ -218,12 +254,34 @@
       <div style="font-size:11px">Run your code and I'll detect errors automatically</div>
     </div>
   </div>
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     // No API key lives here anymore — the extension backend (coder.kvtech.net)
     // holds the real provider key server-side. We only receive a proxy URL.
     let currentCode = '';
     let currentLanguage = 'python';
+    // FIX: buttons used to have inline onclick="..." attributes. Our CSP is
+    // `script-src 'nonce-${nonce}'` with no 'unsafe-inline' — which is
+    // correct and intentional (it's what stops arbitrary injected scripts
+    // from running) but it ALSO blocks inline event-handler attributes like
+    // onclick, even though the nonce is present on the <script> tag. A nonce
+    // only whitelists <script> elements, not onclick/onload/etc attributes —
+    // those are a separate thing CSP blocks unconditionally unless
+    // 'unsafe-inline' is present, which we deliberately don't add. That's why
+    // Apply Fix / Copy / Copy Command rendered but did nothing when clicked.
+    // Fix: no inline handlers at all. A single delegated listener (registered
+    // here, inside this nonce'd script, which CSP has no objection to) reads
+    // data-action from whichever button was clicked. Since it's attached to
+    // #content itself (not the buttons), it keeps working every time
+    // content.innerHTML is replaced by analyze()/renderResult() below.
+    let currentDependencyCommand = '';
+    document.getElementById('content').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      if (btn.dataset.action === 'apply-fix') applyFix();
+      else if (btn.dataset.action === 'copy-code') copyCode();
+      else if (btn.dataset.action === 'copy-dependency') copyDependencyCommand();
+    });
 
     // Tell extension we're ready
     vscode.postMessage({ command: 'ready' });
@@ -345,8 +403,8 @@
             <div class="code-block">
               <pre id="codeBlock">${escapeHtml(r.fixedCode)}</pre>
               <div class="code-actions">
-                <button class="btn btn-primary" onclick="applyFix()">⚡ Apply Fix to File</button>
-                <button class="btn btn-secondary" onclick="copyCode()">📋 Copy</button>
+                <button class="btn btn-primary" data-action="apply-fix">⚡ Apply Fix to File</button>
+                <button class="btn btn-secondary" data-action="copy-code">📋 Copy</button>
               </div>
             </div>
           </div>
@@ -355,6 +413,8 @@
 
       let depSection = '';
       if (r.dependencyCommand && r.dependencyCommand.trim()) {
+        // Store raw value in JS, not in an interpolated HTML attribute (see note above).
+        currentDependencyCommand = r.dependencyCommand;
         depSection = `
           <div class="section">
             <div class="section-header fix">
@@ -364,7 +424,7 @@
               <div class="code-block">
                 <pre>${escapeHtml(r.dependencyCommand)}</pre>
                 <div class="code-actions">
-                  <button class="btn btn-secondary" onclick="copyText('${escapeAttr(r.dependencyCommand)}')">📋 Copy Command</button>
+                  <button class="btn btn-secondary" data-action="copy-dependency">📋 Copy Command</button>
                 </div>
               </div>
             </div>
@@ -409,8 +469,8 @@
         vscode.postMessage({ command: 'copyToClipboard', text: block.textContent });
       }
     }
-    function copyText(text) {
-      vscode.postMessage({ command: 'copyToClipboard', text: text });
+    function copyDependencyCommand() {
+      vscode.postMessage({ command: 'copyToClipboard', text: currentDependencyCommand });
     }
     function escapeHtml(str) {
       if (!str) return '';
@@ -419,10 +479,6 @@
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
-    }
-    function escapeAttr(str) {
-      if (!str) return '';
-      return String(str).replace(/'/g, "\\'");
     }
   </script>
 </body>

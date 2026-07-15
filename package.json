@@ -1,10 +1,23 @@
 {
   "name": "coderai-auto-bug-fixer",
   "displayName": "CoderAI - Auto Bug Fixer",
-  "description": "Automatically detects terminal errors and fixes them using CoderAI, powered by the Professor-Raimal model.",
-  "version": "3.0.1",
+  "description": "Automatically detects terminal errors and warnings and fixes them using CoderAI, powered by the Professor-Raimal model.",
+  "version": "3.1.1",
   "publisher": "RaimalRaja",
   "icon": "media/icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Raimal-Raja-VScode-Extensions/CoderAI-Auto-Bug-Fixer-VScode-Extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Raimal-Raja-VScode-Extensions/CoderAI-Auto-Bug-Fixer-VScode-Extension/issues"
+  },
+  "homepage": "https://github.com/Raimal-Raja-VScode-Extensions/CoderAI-Auto-Bug-Fixer-VScode-Extension#readme",
+  "galleryBanner": {
+    "color": "#1e1e28",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.93.0"
   },
@@ -14,6 +27,7 @@
   ],
   "keywords": [
     "error",
+    "warning",
     "fix",
     "AI",
     "terminal",
@@ -58,7 +72,7 @@
         "coderAI.autoDetect": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically detect errors in the terminal and light up the status bar"
+          "description": "Automatically detect errors and warnings in the terminal and light up the status bar"
         },
         "coderAI.apiKey": {
           "type": "string",
@@ -77,7 +91,7 @@
   },
   "devDependencies": {
     "@types/node": "^18.0.0",
-    "@types/vscode": "^1.93.0",
+    "@types/vscode": "1.93.0",
     "@vscode/vsce": "^2.22.0",
     "esbuild": "^0.28.1",
     "typescript": "^5.0.0"
