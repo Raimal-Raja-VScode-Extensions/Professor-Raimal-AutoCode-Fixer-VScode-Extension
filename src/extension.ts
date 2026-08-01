@@ -7,6 +7,7 @@ let statusBarItem: vscode.StatusBarItem;
 let panel: vscode.WebviewPanel | undefined;
 let lastCapturedError = '';
 
+
 // Tracks the last real code editor the user had focus on. Needed because once the
 // CoderAI webview panel gets focus, vscode.window.activeTextEditor becomes
 // undefined (a webview isn't a text editor), which was breaking "Apply Fix".
